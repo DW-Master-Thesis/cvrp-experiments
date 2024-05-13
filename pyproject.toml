@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=46.4.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.coverage.report]
+exclude_lines = ["@abstractmethod", "@abc.abstractmethod"]
+
+[tool.isort]
+line_length = 120
+
+[tool.mypy]
+check_untyped_defs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+install_types = true
+non_interactive = true          # automatically install_types
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = [
+]
+ignore_missing_imports = true
+
+[tool.pylint]
+[tool.pylint.main]
+extension-pkg-allow-list = []
+load-plugins = "pylint_google_style_guide_imports_enforcing"
+
+[tool.pylint.messages_control]
+disable = ["missing-docstring"]
+
+[tool.pylint.format]
+max-line-length = 120
+indent-string = "  "
+indent-after-paren = 4
+
+[tool.pylint.similarities]
+min-similarity-lines = 6
+ignore-comments = true
+ignore-docstrings = true
+ignore-imports = true
+
+[tool.yapf]
+based_on_style = "google"
+coalesce_brackets = true
+column_limit = 120
+dedent_closing_brackets = true
+indent_width = 2
+spaces_before_comment = 2
+split_before_logical_operator = true
