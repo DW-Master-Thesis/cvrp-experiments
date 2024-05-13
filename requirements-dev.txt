@@ -4,4 +4,4 @@ pre-commit>=2.18.0
 pylint>=2.17.1
 pylint_google_style_guide_imports_enforcing>=1.3.0
 shfmt-py>=3.7.0
-yapf==0.31.0
+yapf>=0.31.0
