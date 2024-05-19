@@ -5,9 +5,9 @@ import fire
 import matplotlib.pyplot as plt
 from tqdm.contrib.concurrent import process_map  # pylint: disable=only-importing-modules-is-allowed
 
-from cvrp_experiments import belief_state, data, types, visualization
+from cvrp_experiments import belief_state, data, types, visualization, cvrp
 
-OUTDIR = "belief_states"
+OUTDIR = "cvrp_solutions"
 
 
 def main(
@@ -29,8 +29,10 @@ def plot_and_save(idx_and_log: tuple[int, str]) -> None:
   idx, log = idx_and_log
   raw_data = data.parse_log_line(log)
   extracted_data = extract_data(raw_data)
+  vrp_solver = cvrp.VrpSolver(raw_data)
+  vrp_solution = vrp_solver.solve_with_path()
   outpath = os.path.join(OUTDIR, f"vrp_solution_{idx}.png")
-  generate_figure(*extracted_data)
+  generate_figure(*extracted_data, vrp_solution)
   plt.savefig(outpath)
 
 
@@ -63,20 +65,19 @@ def generate_figure(
     cells: list[types.Cell],
     times_since_last_update: list[float],
     connections: list[types.Connection],
+    cvrp_solution: types.Path,
 ) -> None:
   belief_states = []
   for robot, path, time in zip(other_robots, other_robot_global_paths, times_since_last_update):
     belief_states.append(belief_state.BeliefState(robot, path, time / 1000 * 2))
   aggregated_belief_state = belief_state.AggregatedBeliefState(belief_states)
 
-  visualization.plot_heatmap(aggregated_belief_state, [-25, 150, -75, 100])
-
-  for connection in connections:
-    visualization.plot_path(connection.path)
+  visualization.plot_heatmap(aggregated_belief_state, [0, 80, -20, 50])
 
   for path in other_robot_global_paths:
     visualization.plot_path(path, "r")
   visualization.plot_path(global_path, "b")
+  visualization.plot_path(cvrp_solution, "g")
 
   visualization.plot_robot(current_robot)
   for robot, time in zip(other_robots, times_since_last_update):
@@ -84,6 +85,9 @@ def generate_figure(
 
   for cell in cells:
     visualization.plot_cell(cell)
+  ax = plt.gca()
+  ax.set_xlim([0, 80])
+  ax.set_ylim([-20, 50])
 
 
 if __name__ == "__main__":

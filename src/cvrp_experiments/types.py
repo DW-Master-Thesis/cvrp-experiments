@@ -55,8 +55,6 @@ class Path:
   def from_dict(data: dict) -> "Path":
     positions_ = []
     for pose in data["poses"]:
-      if isinstance(pose, str) or isinstance(pose["pose"], str):
-        continue
       positions_.append(Position.from_dict(pose["pose"]["position"]))
     return Path(positions_)
 
@@ -98,6 +96,9 @@ class Path:
         distances.append(min([p1.distance_to(p3), p2.distance_to(p3)]))
     return min(distances)
 
+  def extend(self, path: "Path") -> "Path":
+    self.positions.extend(path.positions)
+
 
 @dataclasses.dataclass
 class Connection:
@@ -118,3 +119,67 @@ class Connection:
         data["distance"],
         Path.from_dict(data["path"])
     )
+
+  def connects_nodes(
+      self,
+      node_id_1: int,
+      is_node_id_1_robot: bool,
+      node_id_2: int,
+      is_node_id_2_robot: bool,
+  ) -> bool:
+    node_type_matches_forward = self._node_type_matches(is_node_id_1_robot, is_node_id_2_robot)
+    node_type_matches_backward = self._node_type_matches(is_node_id_2_robot, is_node_id_1_robot)
+
+    if node_type_matches_forward:
+      return self.from_node_id == node_id_1 and self.to_node_id == node_id_2
+    if node_type_matches_backward:
+      return self.from_node_id == node_id_2 and self.to_node_id == node_id_1
+    return False
+
+  def _node_type_matches(self, node_type_1: bool, node_type_2: bool) -> bool:
+    return node_type_1 == self.is_from_node_robot and node_type_2 == self.is_to_node_robot
+
+
+@dataclasses.dataclass
+class Connections:
+  connections: list[Connection]
+
+  @staticmethod
+  def from_dict(data: dict) -> "Connections":
+    return Connections([Connection.from_dict(connection) for connection in data["connections"]])
+
+  def get_connection_distance(
+      self,
+      from_node_id: int,
+      is_from_node_robot: bool,
+      to_node_id: int,
+      is_to_node_robot: bool,
+  ) -> int:
+    for connection in self.connections:
+      if connection.connects_nodes(from_node_id, is_from_node_robot, to_node_id, is_to_node_robot):
+        return connection.distance
+    return 9999
+
+  def is_node_connected(
+      self,
+      node_id: int,
+      is_node_robot: bool,
+  ) -> bool:
+    for connection in self.connections:
+      if connection.from_node_id == node_id and connection.is_from_node_robot == is_node_robot:
+        return True
+      if connection.to_node_id == node_id and connection.is_to_node_robot == is_node_robot:
+        return True
+    return False
+
+  def get_path_between_nodes(
+      self,
+      from_node_id: int,
+      is_from_node_robot: bool,
+      to_node_id: int,
+      is_to_node_robot: bool,
+  ) -> Path:
+    for connection in self.connections:
+      if connection.connects_nodes(from_node_id, is_from_node_robot, to_node_id, is_to_node_robot):
+        return connection.path
+    return Path([])
