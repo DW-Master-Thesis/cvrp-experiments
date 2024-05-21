@@ -2,7 +2,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-from cvrp_experiments import types, belief_state
+from cvrp_experiments import belief_state, types
 
 
 def plot_robot(robot: types.Robot, time_since_last_update: float | None = None) -> None:
@@ -51,22 +51,40 @@ def plot_cell(cell: types.Cell, plot_connection_point: bool = False) -> None:
     ax.scatter([cell.connection_point.x], [cell.connection_point.y], color='r', marker='x')
 
 
-def plot_path(path: types.Path, color: str = "#AAAAAA") -> None:
+def plot_path(path: types.Path, color: str = "#AAAAAA", end_color: str | None = None) -> None:
   ax = plt.gca()
   x = [position.x for position in path.positions]
   y = [position.y for position in path.positions]
-  ax.plot(x, y, marker=",", color=color)
+  if end_color:
+    colors = _calc_color_gradient(color, end_color, len(path.positions) - 1)
+    for x1, y1, x2, y2, color in zip(x[:-1], y[:-1], x[1:], y[1:], colors):  # pylint: disable=redefined-argument-from-local
+      ax.plot([x1, x2], [y1, y2], color=color)
+  else:
+    ax.plot(x, y, marker=",", color=color)
+
+
+def _calc_color_gradient(start_color: str, end_color: str, num_colors: int) -> list[str]:
+  r_start, g_start, b_start = int(start_color[1:3], 16), int(start_color[3:5], 16), int(start_color[5:7], 16)
+  r_end, g_end, b_end = int(end_color[1:3], 16), int(end_color[3:5], 16), int(end_color[5:7], 16)
+  r_step, g_step, b_step = (r_end - r_start) / num_colors, (g_end -
+                                                            g_start) / num_colors, (b_end - b_start) / num_colors
+  colors = []
+  r, g, b = r_start, g_start, b_start
+  for _ in range(num_colors):
+    r, g, b = r + r_step, g + g_step, b + b_step
+    colors.append(f"#{int(r):02X}{int(g):02X}{int(b):02X}")
+  return colors
 
 
 def plot_heatmap(
     belief_state_: belief_state.BeliefState | belief_state.BeliefState,
     limits: list[float],
-  ) -> None:
+) -> None:
   ax = plt.gca()
   xmin, xmax, ymin, ymax = limits
   y_arr, x_arr = np.meshgrid(
-    np.linspace(ymin, ymax, 100),
-    np.linspace(xmin, xmax, 100),
+      np.linspace(ymin, ymax, 100),
+      np.linspace(xmin, xmax, 100),
   )
   z_arr = np.zeros_like(x_arr)
   for i in range(x_arr.shape[0]):

@@ -72,12 +72,12 @@ def generate_figure(
     belief_states.append(belief_state.BeliefState(robot, path, time / 1000 * 2))
   aggregated_belief_state = belief_state.AggregatedBeliefState(belief_states)
 
-  visualization.plot_heatmap(aggregated_belief_state, [0, 80, -20, 50])
+  visualization.plot_heatmap(aggregated_belief_state, [-20, 80, -20, 80])
 
   for path in other_robot_global_paths:
     visualization.plot_path(path, "r")
   visualization.plot_path(global_path, "b")
-  visualization.plot_path(cvrp_solution, "g")
+  visualization.plot_path(cvrp_solution, "#002200", "#BBFFBB")
 
   visualization.plot_robot(current_robot)
   for robot, time in zip(other_robots, times_since_last_update):
@@ -86,8 +86,8 @@ def generate_figure(
   for cell in cells:
     visualization.plot_cell(cell)
   ax = plt.gca()
-  ax.set_xlim([0, 80])
-  ax.set_ylim([-20, 50])
+  ax.set_xlim([-20, 80])
+  ax.set_ylim([-20, 80])
 
 
 if __name__ == "__main__":

@@ -22,7 +22,7 @@ class VrpSolver:
 
   def solve(self) -> list[int]:
     distance_matrix = self._calc_distance_matrix()
-    likelihoods_at_nodes = self._calc_likeliehood_at_nodes()
+    node_rewards = self._calc_node_rewards()
     manager = pywrapcp.RoutingIndexManager(
         self._distance_matrix_size,
         self._num_vehicles,
@@ -36,12 +36,7 @@ class VrpSolver:
       to_node = manager.IndexToNode(to_index)
       return distance_matrix[from_node][to_node]
 
-    def likelihood_callback(from_index):
-      from_node = manager.IndexToNode(from_index)
-      return likelihoods_at_nodes[from_node]
-
     transit_callback_index = routing.RegisterTransitCallback(distance_callback)
-    likelihood_callback_index = routing.RegisterUnaryTransitCallback(likelihood_callback)
     routing.AddDimension(
         transit_callback_index,
         0,  # no slack
@@ -49,27 +44,17 @@ class VrpSolver:
         True,  # start cumul to zero
         "distance",
     )
-    routing.AddDimension(
-      likelihood_callback_index,
-      0,  # null capacity slack
-      1,
-      True,  # start cumul to zero
-      "likelihood",
-    )
-    routing.SetArcCostEvaluatorOfAllVehicles(likelihood_callback_index)
-    distance_dimension = routing.GetDimensionOrDie("distance")
-    distance_dimension.SetGlobalSpanCostCoefficient(0)
-    likelihood_dimension = routing.GetDimensionOrDie("likelihood")
-    likelihood_dimension.SetGlobalSpanCostCoefficient(100)
     # Add disjunction, allows nodes to be skipped
-    for node in range(2, self._distance_matrix_size):
-      routing.AddDisjunction([manager.NodeToIndex(node)], 10)
+    for node in range(self._num_vehicles + 1, self._distance_matrix_size):
+      routing.AddDisjunction([manager.NodeToIndex(node)], node_rewards[node])
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
-    search_parameters.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PARALLEL_CHEAPEST_INSERTION
+    search_parameters.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_MOST_CONSTRAINED_ARC
     search_parameters.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GREEDY_DESCENT
     solution = routing.SolveWithParameters(search_parameters)
     if solution:
-      return self._get_solution(manager, routing, solution)
+      vrp_solution = self._extract_solution(manager, routing, solution)
+      self._print_solution(manager, routing, vrp_solution)
+      return self._vrp_ids_to_node_ids(vrp_solution)
     print("No solution found.")
     return []
 
@@ -84,33 +69,51 @@ class VrpSolver:
       path.extend(path_between_nodes)
     return path
 
-  def _get_solution(self, manager, routing, solution) -> list[int]:
+  def _extract_solution(self, manager, routing, solution) -> list[int]:
     vrp_solution = []
     vehicle_id = 0
     index = routing.Start(vehicle_id)
-    plan_output = f"Route for vehicle {vehicle_id}:\n"
-    route_distance = 0
-    route_likelihood = 0
     while not routing.IsEnd(index):
       node_index = manager.IndexToNode(index)
-      plan_output += f"{node_index} -> "
-      if node_index == 1:
-        vrp_solution.append(self._current_robot.robot_id)
-      elif node_index > 1:
-        vrp_solution.append(self._cell_ids[node_index - self._num_vehicles - 1])
-      previous_index = index
+      vrp_solution.append(node_index)
       index = solution.Value(routing.NextVar(index))
-      distance_dimension = routing.GetDimensionOrDie("distance")
-      route_distance += distance_dimension.GetTransitValue(previous_index, index, vehicle_id)
-      likelihood_dimension = routing.GetDimensionOrDie("likelihood")
-      route_likelihood += likelihood_dimension.GetTransitValue(previous_index, index, vehicle_id)
-    node_index = manager.IndexToNode(index)
-    plan_output += f"{node_index}\n"
-    plan_output += f"Distance of the route: {route_distance}m\n"
-    plan_output += f"Likelihood of vehicle intersecting belief state {vehicle_id}: {route_likelihood}\n"
-    print(plan_output)
-    print(vrp_solution)
     return vrp_solution
+
+  def _vrp_ids_to_node_ids(self, vrp_indices: list[int]) -> list[int]:
+    vrp_solution = []
+    for node_idx in vrp_indices:
+      if node_idx == 1:
+        vrp_solution.append(self._current_robot.robot_id)
+      elif node_idx > 1:
+        vrp_solution.append(self._cell_ids[node_idx - self._num_vehicles - 1])
+    return vrp_solution
+
+  def _print_solution(self, manager, routing, vrp_indices: list[int]) -> None:  # pylint: disable=too-many-locals
+    node_costs = self._calc_node_costs()
+    node_rewards = self._calc_node_rewards()
+    plan_output = ""
+    route_distance = 0
+    route_cost = 0
+    route_reward = 0
+    route_penalty = sum(node_rewards)
+    index = manager.NodeToIndex(vrp_indices[0])
+    for node_idx in vrp_indices[:-1]:
+      previous_index = index
+      index = manager.NodeToIndex(node_idx)
+      distance_dimension = routing.GetDimensionOrDie("distance")
+      distance_from_previous = distance_dimension.GetTransitValue(previous_index, index, 0)
+      plan_output += f"{node_idx} ->({distance_from_previous}) "
+      route_distance += distance_from_previous
+      route_cost += node_costs[node_idx]
+      route_reward += node_rewards[node_idx]
+    route_penalty -= route_reward
+    plan_output += f"{vrp_indices[-1]}\n"
+    plan_output += f"Distance of the route: {route_distance}m\n"
+    plan_output += f"Cost of the route: {route_cost}\n"
+    plan_output += f"Reward of the route: {route_reward}\n"
+    plan_output += f"Penalty of the route: {route_penalty}\n"
+    print(plan_output)
+    print(self._vrp_ids_to_node_ids(vrp_indices))
 
   def _calc_distance_matrix(self) -> list[list[int]]:
     distance_matrix = [[0 for _ in range(self._distance_matrix_size)] for _ in range(self._distance_matrix_size)]
@@ -150,12 +153,18 @@ class VrpSolver:
         is_to_node_robot,
     )
 
-  def _calc_likeliehood_at_nodes(self) -> list[int]:
-    likelihoods_at_nodes = [0 for _ in range(self._num_vehicles + 1)]
+  def _calc_node_costs(self) -> list[float]:
+    node_costs = [0 for _ in range(self._num_vehicles + 1)]
     for cell in self._cells:
       likelihood = self._aggregated_belief_state.get_likelihood(cell.position)
-      likelihoods_at_nodes.append(int(likelihood * 100))
-    return likelihoods_at_nodes
+      likelihood = min(1, likelihood / 0.1)
+      node_costs.append(likelihood)
+    return node_costs
+
+  def _calc_node_rewards(self) -> list[int]:
+    node_costs = self._calc_node_costs()
+    node_rewards = [int(1000 * (1 - likelihood)) for likelihood in node_costs]
+    return node_rewards
 
   def _get_connected_cell_ids(self, data: dict) -> list[int]:
     node_ids = data["cell_or_robot_ids"]
