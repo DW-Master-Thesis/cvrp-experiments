@@ -24,7 +24,6 @@ class VrpSolver:
 
   def solve(self) -> list[int]:
     distance_matrix = self._calc_distance_matrix()
-    node_costs = self._calc_node_costs()
     node_rewards = self._calc_node_rewards()
     manager = pywrapcp.RoutingIndexManager(
         self._distance_matrix_size,
@@ -39,11 +38,6 @@ class VrpSolver:
       to_node = manager.IndexToNode(to_index)
       return distance_matrix[from_node][to_node]
 
-    def cost_callback(from_index):
-      from_node = manager.IndexToNode(from_index)
-      cost = int(100 * node_costs[from_node])
-      return cost
-
     transit_callback_index = routing.RegisterTransitCallback(distance_callback)
     routing.AddDimension(
         transit_callback_index,
@@ -52,22 +46,12 @@ class VrpSolver:
         True,  # start cumul to zero
         "distance",
     )
-    cost_callback_index = routing.RegisterUnaryTransitCallback(cost_callback)
-    routing.AddDimension(
-        cost_callback_index,
-        0,  # no slack
-        100,  # vehicle maximum accumulated cost
-        True,  # start cumul to zero
-        "cost",
-    )
-    # routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
-    routing.SetArcCostEvaluatorOfAllVehicles(cost_callback_index)
+    routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
     # Add disjunction, allows nodes to be skipped
     for node in range(self._num_vehicles + 1, self._distance_matrix_size):
-    #   routing.AddDisjunction([manager.NodeToIndex(node)], node_rewards[node])
-      routing.AddDisjunction([manager.NodeToIndex(node)], 10)
+      routing.AddDisjunction([manager.NodeToIndex(node)], node_rewards[node])
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
-    search_parameters.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PARALLEL_CHEAPEST_INSERTION
+    search_parameters.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_MOST_CONSTRAINED_ARC
     search_parameters.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GREEDY_DESCENT
     solution = routing.SolveWithParameters(search_parameters)
     if solution:
