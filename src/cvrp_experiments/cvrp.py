@@ -6,7 +6,8 @@ from cvrp_experiments import belief_state, types
 
 class VrpSolver:
 
-  def __init__(self, data: dict) -> None:
+  def __init__(self, data: dict, silent_mode:bool = False) -> None:
+    self._silent_mode = silent_mode
     self._current_robot = types.Robot.from_dict(data["robots"][0])
     self._other_robots = [types.Robot.from_dict(i) for i in data["robots"][1:]]
     self._other_robot_global_paths = [types.Path.from_dict(i) for i in data["other_robot_global_paths"]]
@@ -19,6 +20,7 @@ class VrpSolver:
     self._depot_indices = [1]
     self._end_indicies = [0]
     self._distance_matrix_size = len(self._cell_ids) + self._num_vehicles + 1
+    self.distance, self.reward, self.penalty, self.reward_evolution = 0, 0, 0, []
 
   def solve(self) -> list[int]:
     distance_matrix = self._calc_distance_matrix()
@@ -53,7 +55,8 @@ class VrpSolver:
     solution = routing.SolveWithParameters(search_parameters)
     if solution:
       vrp_solution = self._extract_solution(manager, routing, solution)
-      self._print_solution(manager, routing, vrp_solution)
+      if not self._silent_mode:
+        self._print_solution(manager, routing, vrp_solution)
       return self._vrp_ids_to_node_ids(vrp_solution)
     print("No solution found.")
     return []
@@ -70,13 +73,27 @@ class VrpSolver:
     return path
 
   def _extract_solution(self, manager, routing, solution) -> list[int]:
+    self.distance, self.reward, self.penalty, self.reward_evolution = 0, 0, 0, []
+    node_rewards = self._calc_node_rewards()
+    self.penalty = sum(node_rewards)
+    path_reward_evolution = []
     vrp_solution = []
-    vehicle_id = 0
-    index = routing.Start(vehicle_id)
+    index = routing.Start(0)
+    distance_dimension = routing.GetDimensionOrDie("distance")
     while not routing.IsEnd(index):
       node_index = manager.IndexToNode(index)
       vrp_solution.append(node_index)
+      previous_index = index
       index = solution.Value(routing.NextVar(index))
+      distance_from_previous = distance_dimension.GetTransitValue(previous_index, index, 0)
+      self.distance += distance_from_previous
+      if node_index <= self._num_vehicles:
+        continue
+      reward = node_rewards[node_index]
+      self.reward += reward
+      path_reward_evolution.append(reward)
+    self.penalty -= self.reward
+    self.reward_evolution.append(path_reward_evolution)
     return vrp_solution
 
   def _vrp_ids_to_node_ids(self, vrp_indices: list[int]) -> list[int]:
@@ -89,29 +106,17 @@ class VrpSolver:
     return vrp_solution
 
   def _print_solution(self, manager, routing, vrp_indices: list[int]) -> None:  # pylint: disable=too-many-locals
-    node_costs = self._calc_node_costs()
-    node_rewards = self._calc_node_rewards()
     plan_output = ""
-    route_distance = 0
-    route_cost = 0
-    route_reward = 0
-    route_penalty = sum(node_rewards)
-    index = manager.NodeToIndex(vrp_indices[0])
-    for node_idx in vrp_indices[:-1]:
-      previous_index = index
+    distance_dimension = routing.GetDimensionOrDie("distance")
+    for prev_node_idx, node_idx in zip(vrp_indices[:-1], vrp_indices[1:]):
+      previous_index = manager.NodeToIndex(prev_node_idx)
       index = manager.NodeToIndex(node_idx)
-      distance_dimension = routing.GetDimensionOrDie("distance")
       distance_from_previous = distance_dimension.GetTransitValue(previous_index, index, 0)
-      plan_output += f"{node_idx} ->({distance_from_previous}) "
-      route_distance += distance_from_previous
-      route_cost += node_costs[node_idx]
-      route_reward += node_rewards[node_idx]
-    route_penalty -= route_reward
+      plan_output += f"{prev_node_idx} ->({distance_from_previous}) "
     plan_output += f"{vrp_indices[-1]}\n"
-    plan_output += f"Distance of the route: {route_distance}m\n"
-    plan_output += f"Cost of the route: {route_cost}\n"
-    plan_output += f"Reward of the route: {route_reward}\n"
-    plan_output += f"Penalty of the route: {route_penalty}\n"
+    plan_output += f"Distance of the route: {self.distance}m\n"
+    plan_output += f"Reward of the route: {self.reward}\n"
+    plan_output += f"Penalty of the route: {self.penalty}\n"
     print(plan_output)
     print(self._vrp_ids_to_node_ids(vrp_indices))
 
@@ -164,6 +169,8 @@ class VrpSolver:
   def _calc_node_rewards(self) -> list[int]:
     node_costs = self._calc_node_costs()
     node_rewards = [int(1000 * (1 - likelihood)) for likelihood in node_costs]
+    for i in range(self._num_vehicles + 1):
+      node_rewards[i] = 0
     return node_rewards
 
   def _get_connected_cell_ids(self, data: dict) -> list[int]:
