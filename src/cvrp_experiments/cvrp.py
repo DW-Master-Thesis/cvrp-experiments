@@ -6,11 +6,15 @@ from cvrp_experiments import belief_state, types
 
 class VrpSolver:
 
-  def __init__(self, data: dict, silent_mode:bool = False) -> None:
+  def __init__(self, data: dict, silent_mode: bool = False, use_baseline_vrp_solution: bool = False) -> None:
     self._silent_mode = silent_mode
+    self._use_baseline_vrp_solution = use_baseline_vrp_solution
     self._current_robot = types.Robot.from_dict(data["robots"][0])
     self._other_robots = [types.Robot.from_dict(i) for i in data["robots"][1:]]
     self._other_robot_global_paths = [types.Path.from_dict(i) for i in data["other_robot_global_paths"]]
+    self._baseline_vrp_solution = []
+    if use_baseline_vrp_solution and len(data["vrp_solution"]) > 0:
+      self._baseline_vrp_solution = data["vrp_solution"][0]["route"]
     self._times_since_last_update = data["time_since_last_update"]
     self._connections = types.Connections.from_dict(data)
     self._cell_ids = self._get_connected_cell_ids(data)
@@ -53,6 +57,10 @@ class VrpSolver:
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
     search_parameters.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_MOST_CONSTRAINED_ARC
     search_parameters.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GREEDY_DESCENT
+
+    if self._use_baseline_vrp_solution:
+      return self._extract_baseline_solution(manager, routing)
+
     solution = routing.SolveWithParameters(search_parameters)
     if solution:
       vrp_solution = self._extract_solution(manager, routing, solution)
@@ -121,6 +129,35 @@ class VrpSolver:
     print(plan_output)
     print(self._vrp_ids_to_node_ids(vrp_indices))
 
+  def _extract_baseline_solution(self, manager, routing) -> list[int]:
+    node_rewards = self._calc_node_rewards()
+    self.distance, self.reward, self.penalty, self.reward_evolution = 0, 0, 0, []
+    self.penalty = sum(node_rewards)
+    vrp_solution = []
+    vrp_solution.append(1)
+    if not self._baseline_vrp_solution:
+      if not self._silent_mode:
+        print("No baseline solution found.")
+      return vrp_solution
+    for i in self._baseline_vrp_solution[1:]:
+      if i not in self._cell_ids:
+        if not self._silent_mode:
+          print(f"Node {i} not in connected cells")
+      else:
+        idx = self._cell_ids.index(i) + 2
+        vrp_solution.append(idx)
+    distance_dimension = routing.GetDimensionOrDie("distance")
+    for prev_idx, idx in zip(vrp_solution[1:-1], vrp_solution[2:]):
+      previous_index = manager.NodeToIndex(prev_idx)
+      index = manager.NodeToIndex(idx)
+      self.reward += node_rewards[idx]
+      self.penalty -= node_rewards[idx]
+      self.distance += distance_dimension.GetTransitValue(previous_index, index, 0)
+      self.reward_evolution.append(node_rewards[idx])
+    if not self._silent_mode:
+      self._print_solution(manager, routing, vrp_solution)
+    return self._vrp_ids_to_node_ids(vrp_solution)
+
   def _calc_distance_matrix(self) -> list[list[int]]:
     distance_matrix = [[0 for _ in range(self._distance_matrix_size)] for _ in range(self._distance_matrix_size)]
     for i, cell_id in enumerate(self._cell_ids):
@@ -181,7 +218,7 @@ class VrpSolver:
     connected_cell_ids = [i for i in cell_ids if self._connections.is_node_connected(i, False)]
     return connected_cell_ids
 
-  def _get_connected_cells(self, data:dict) -> list[types.Cell]:
+  def _get_connected_cells(self, data: dict) -> list[types.Cell]:
     all_cells = [types.Cell.from_dict(i) for i in data["cells"]]
     connected_cells = []
     for cell_id in self._cell_ids:
