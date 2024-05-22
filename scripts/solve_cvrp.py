@@ -29,7 +29,7 @@ def plot_and_save(idx_and_log: tuple[int, str]) -> None:
   idx, log = idx_and_log
   raw_data = data.parse_log_line(log)
   extracted_data = extract_data(raw_data)
-  vrp_solver = cvrp.VrpSolver(raw_data)
+  vrp_solver = cvrp.VrpSolver(raw_data, True)
   vrp_solution = vrp_solver.solve_with_path()
   outpath = os.path.join(OUTDIR, f"vrp_solution_{idx}.png")
   generate_figure(*extracted_data, vrp_solution)

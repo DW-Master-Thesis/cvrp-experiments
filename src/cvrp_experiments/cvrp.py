@@ -29,6 +29,7 @@ class VrpSolver:
   def solve(self) -> list[int]:
     distance_matrix = self._calc_distance_matrix()
     node_rewards = self._calc_node_rewards()
+    # node_costs = self._calc_node_costs()
     manager = pywrapcp.RoutingIndexManager(
         self._distance_matrix_size,
         self._num_vehicles,
@@ -42,6 +43,11 @@ class VrpSolver:
       to_node = manager.IndexToNode(to_index)
       return distance_matrix[from_node][to_node]
 
+    # def cost_callback(from_index):
+    #   from_node = manager.IndexToNode(from_index)
+    #   cost = int(100 * node_costs[from_node])
+    #   return cost
+
     transit_callback_index = routing.RegisterTransitCallback(distance_callback)
     routing.AddDimension(
         transit_callback_index,
@@ -50,7 +56,15 @@ class VrpSolver:
         True,  # start cumul to zero
         "distance",
     )
-    routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
+    # cost_callback_index = routing.RegisterUnaryTransitCallback(cost_callback)
+    # routing.AddDimension(
+    #   cost_callback_index,
+    #   0,  # no slack
+    #   1000,  # vehicle maximum travel distance
+    #   True,  # start cumul to zero
+    #   "cost",
+    # )
+    # routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
     # Add disjunction, allows nodes to be skipped
     for node in range(self._num_vehicles + 1, self._distance_matrix_size):
       routing.AddDisjunction([manager.NodeToIndex(node)], node_rewards[node])
@@ -85,7 +99,6 @@ class VrpSolver:
     self.distance, self.reward, self.penalty, self.reward_evolution = 0, 0, 0, []
     node_rewards = self._calc_node_rewards()
     self.penalty = sum(node_rewards)
-    path_reward_evolution = []
     vrp_solution = []
     index = routing.Start(0)
     distance_dimension = routing.GetDimensionOrDie("distance")
@@ -100,9 +113,8 @@ class VrpSolver:
         continue
       reward = node_rewards[node_index]
       self.reward += reward
-      path_reward_evolution.append(reward)
+      self.reward_evolution.append(reward)
     self.penalty -= self.reward
-    self.reward_evolution.append(path_reward_evolution)
     return vrp_solution
 
   def _vrp_ids_to_node_ids(self, vrp_indices: list[int]) -> list[int]:

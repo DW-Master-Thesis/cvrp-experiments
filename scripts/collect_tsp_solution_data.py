@@ -33,6 +33,7 @@ def main(logs: str, output_filename: str) -> None:
 
   print("Distances:", distances)
   print("Rewards:", rewards, f"({sum(rewards)})")
+  print("Rewards evolution:", rewards_evolution)
 
   with open(os.path.join(OUTDIR, output_filename), "w", encoding="utf-8") as f:
     json.dump({
