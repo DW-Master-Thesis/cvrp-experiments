@@ -43,19 +43,36 @@ class VrpSolver:
       to_node = manager.IndexToNode(to_index)
       return distance_matrix[from_node][to_node]
 
+    def distance_and_reward_callback(from_index, to_index):
+      from_node = manager.IndexToNode(from_index)
+      to_node = manager.IndexToNode(to_index)
+      distance = distance_matrix[from_node][to_node]
+      reward = node_rewards[to_node]
+      if distance == 0:
+        return 0
+      return distance - reward // 10
+
     # def cost_callback(from_index):
     #   from_node = manager.IndexToNode(from_index)
     #   cost = int(100 * node_costs[from_node])
     #   return cost
 
-    transit_callback_index = routing.RegisterTransitCallback(distance_callback)
+    distance_callback_index = routing.RegisterTransitCallback(distance_callback)
     routing.AddDimension(
-        transit_callback_index,
+        distance_callback_index,
         0,  # no slack
         1000,  # vehicle maximum travel distance
         True,  # start cumul to zero
         "distance",
     )
+    transit_callback_index = routing.RegisterTransitCallback(distance_and_reward_callback)
+    # routing.AddDimension(
+    #     transit_callback_index,
+    #     0,  # no slack
+    #     10_000_000,  # vehicle maximum travel distance
+    #     True,  # start cumul
+    #     "distance_and_reward",
+    # )
     # cost_callback_index = routing.RegisterUnaryTransitCallback(cost_callback)
     # routing.AddDimension(
     #   cost_callback_index,
@@ -64,7 +81,7 @@ class VrpSolver:
     #   True,  # start cumul to zero
     #   "cost",
     # )
-    # routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
+    routing.SetArcCostEvaluatorOfAllVehicles(distance_callback_index)
     # Add disjunction, allows nodes to be skipped
     for node in range(self._num_vehicles + 1, self._distance_matrix_size):
       routing.AddDisjunction([manager.NodeToIndex(node)], node_rewards[node])

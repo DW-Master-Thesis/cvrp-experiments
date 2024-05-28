@@ -158,6 +158,10 @@ class Connections:
     for connection in self.connections:
       if connection.connects_nodes(from_node_id, is_from_node_robot, to_node_id, is_to_node_robot):
         return connection.distance
+    for connection in self.connections:
+      if connection.connects_nodes(to_node_id, is_to_node_robot, from_node_id, is_from_node_robot):
+        return connection.distance
+    print(f"Could not find distance between nodes {from_node_id} and {to_node_id}")
     return 9999
 
   def is_node_connected(
@@ -182,4 +186,10 @@ class Connections:
     for connection in self.connections:
       if connection.connects_nodes(from_node_id, is_from_node_robot, to_node_id, is_to_node_robot):
         return connection.path
+    for connection in self.connections:
+      if connection.connects_nodes(to_node_id, is_to_node_robot, from_node_id, is_from_node_robot):
+        path = connection.path
+        path.positions.reverse()
+        return path
+    print(f"Could not find path between nodes {from_node_id} and {to_node_id}")
     return Path([])
