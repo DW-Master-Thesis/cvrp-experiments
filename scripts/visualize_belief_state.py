@@ -29,9 +29,9 @@ def plot_and_save(idx_and_log: tuple[int, str]) -> None:
   idx, log = idx_and_log
   raw_data = data.parse_log_line(log)
   extracted_data = extract_data(raw_data)
-  outpath = os.path.join(OUTDIR, f"vrp_solution_{idx}.png")
+  outpath = os.path.join(OUTDIR, f"vrp_solution_{idx}.svg")
   generate_figure(*extracted_data)
-  plt.savefig(outpath)
+  plt.savefig(outpath, bbox_inches='tight', pad_inches=0.1)
 
 
 def extract_data(
@@ -69,14 +69,14 @@ def generate_figure(
     belief_states.append(belief_state.BeliefState(robot, path, time / 1000 * 2))
   aggregated_belief_state = belief_state.AggregatedBeliefState(belief_states)
 
-  visualization.plot_heatmap(aggregated_belief_state, [-25, 150, -75, 100])
+  visualization.plot_heatmap(aggregated_belief_state, [-25, 80, -25, 100])
+  #
+  # for connection in connections:
+  #   visualization.plot_path(connection.path)
 
-  for connection in connections:
-    visualization.plot_path(connection.path)
-
+  visualization.plot_path(global_path, "b", label="Global plan")
   for path in other_robot_global_paths:
-    visualization.plot_path(path, "r")
-  visualization.plot_path(global_path, "b")
+    visualization.plot_path(path, "r", label="Other robot global plan")
 
   visualization.plot_robot(current_robot)
   for robot, time in zip(other_robots, times_since_last_update):
@@ -84,6 +84,14 @@ def generate_figure(
 
   for cell in cells:
     visualization.plot_cell(cell)
+  if len(cells) > 0:
+    visualization.plot_cell(cells[0], label="Position of cells to visit")
+  plt.legend()
+  plt.gca().set_xticklabels([])
+  plt.gca().set_yticklabels([])
+  plt.gca().tick_params(axis='both', which='both', length=0)
+  plt.title("Heatmap of Probable Robot Positions from Last Communication Update")
+  plt.tight_layout()
 
 
 if __name__ == "__main__":

@@ -31,9 +31,9 @@ def plot_and_save(idx_and_log: tuple[int, str]) -> None:
   extracted_data = extract_data(raw_data)
   vrp_solver = cvrp.VrpSolver(raw_data, True)
   vrp_solution = vrp_solver.solve_with_path()
-  outpath = os.path.join(OUTDIR, f"vrp_solution_{idx}.png")
+  outpath = os.path.join(OUTDIR, f"vrp_solution_{idx}.svg")
   generate_figure(*extracted_data, vrp_solution)
-  plt.savefig(outpath)
+  plt.savefig(outpath, bbox_inches='tight', pad_inches=0.1)
 
 
 def extract_data(
@@ -72,12 +72,12 @@ def generate_figure(
     belief_states.append(belief_state.BeliefState(robot, path, time / 1000 * 2))
   aggregated_belief_state = belief_state.AggregatedBeliefState(belief_states)
 
-  visualization.plot_heatmap(aggregated_belief_state, [-20, 80, -20, 80])
+  visualization.plot_heatmap(aggregated_belief_state, [-20, 80, -20, 100])
 
   for path in other_robot_global_paths:
-    visualization.plot_path(path, "r")
-  visualization.plot_path(global_path, "b")
-  visualization.plot_path(cvrp_solution, "#002200", "#BBFFBB")
+    visualization.plot_path(path, "r", label="Other robot path")
+  # visualization.plot_path(global_path, "b")
+  visualization.plot_path(cvrp_solution, "#002200", label="TSP problem solution", end_color="#77DD77")
 
   visualization.plot_robot(current_robot)
   for robot, time in zip(other_robots, times_since_last_update):
@@ -85,9 +85,17 @@ def generate_figure(
 
   for cell in cells:
     visualization.plot_cell(cell)
-  ax = plt.gca()
-  ax.set_xlim([-20, 80])
-  ax.set_ylim([-20, 80])
+  if len(cells) > 0:
+    visualization.plot_cell(cells[0], label="Position of cells to visit")
+  plt.legend()
+  plt.gca().set_xticklabels([])
+  plt.gca().set_yticklabels([])
+  plt.gca().tick_params(axis='both', which='both', length=0)
+  plt.title("Solution to the TSP problem with constraints and rewards")
+  plt.tight_layout()
+  # ax = plt.gca()
+  # ax.set_xlim([-20, 80])
+  # ax.set_ylim([-20, 80])
 
 
 if __name__ == "__main__":
