@@ -66,13 +66,13 @@ class VrpSolver:
         "distance",
     )
     transit_callback_index = routing.RegisterTransitCallback(distance_and_reward_callback)
-    # routing.AddDimension(
-    #     transit_callback_index,
-    #     0,  # no slack
-    #     10_000_000,  # vehicle maximum travel distance
-    #     True,  # start cumul
-    #     "distance_and_reward",
-    # )
+    routing.AddDimension(
+        transit_callback_index,
+        0,  # no slack
+        10_000_000,  # vehicle maximum travel distance
+        True,  # start cumul
+        "distance_and_reward",
+    )
     # cost_callback_index = routing.RegisterUnaryTransitCallback(cost_callback)
     # routing.AddDimension(
     #   cost_callback_index,
@@ -81,12 +81,12 @@ class VrpSolver:
     #   True,  # start cumul to zero
     #   "cost",
     # )
-    routing.SetArcCostEvaluatorOfAllVehicles(distance_callback_index)
+    routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
     # Add disjunction, allows nodes to be skipped
     for node in range(self._num_vehicles + 1, self._distance_matrix_size):
-      routing.AddDisjunction([manager.NodeToIndex(node)], node_rewards[node])
+      routing.AddDisjunction([manager.NodeToIndex(node)], 1000)
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
-    search_parameters.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_MOST_CONSTRAINED_ARC
+    search_parameters.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PARALLEL_CHEAPEST_INSERTION
     search_parameters.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GREEDY_DESCENT
 
     if self._use_baseline_vrp_solution:

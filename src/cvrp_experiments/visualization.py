@@ -7,7 +7,7 @@ from cvrp_experiments import belief_state, types
 
 def plot_robot(robot: types.Robot, time_since_last_update: float | None = None) -> None:
   color = 'b' if time_since_last_update is None else 'r'
-  label = "Robot position" if time_since_last_update is None else "Other robot position\nat last map update"
+  label = "Current robot's position" if time_since_last_update is None else "Other robot's position\nat last map update"
   ax = plt.gca()
   ax.scatter(
       [robot.position.x],
@@ -29,7 +29,7 @@ def plot_robot(robot: types.Robot, time_since_last_update: float | None = None) 
       s=115,
       linewidths=2,
       c="#0000",
-      label="Other robot position",
+      label="Other robot's position",
   )
   ax.plot(
       [robot.position.x, robot.state_estimation.x],

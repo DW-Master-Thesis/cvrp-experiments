@@ -31,7 +31,7 @@ def plot_and_save(idx_and_log: tuple[int, str]) -> None:
   extracted_data = extract_data(raw_data)
   vrp_solver = cvrp.VrpSolver(raw_data, True)
   vrp_solution = vrp_solver.solve_with_path()
-  outpath = os.path.join(OUTDIR, f"vrp_solution_{idx}.svg")
+  outpath = os.path.join(OUTDIR, f"vrp_solution_{idx}.png")
   generate_figure(*extracted_data, vrp_solution)
   plt.savefig(outpath, bbox_inches='tight', pad_inches=0.1)
 
@@ -77,7 +77,7 @@ def generate_figure(
   for path in other_robot_global_paths:
     visualization.plot_path(path, "r", label="Other robot path")
   # visualization.plot_path(global_path, "b")
-  visualization.plot_path(cvrp_solution, "#002200", label="TSP problem solution", end_color="#77DD77")
+  visualization.plot_path(cvrp_solution, "#0000AA", label="TSP problem solution", end_color="#A6FFFB")
 
   visualization.plot_robot(current_robot)
   for robot, time in zip(other_robots, times_since_last_update):
@@ -87,7 +87,7 @@ def generate_figure(
     visualization.plot_cell(cell)
   if len(cells) > 0:
     visualization.plot_cell(cells[0], label="Position of cells to visit")
-  plt.legend()
+  plt.legend(loc='lower right')
   plt.gca().set_xticklabels([])
   plt.gca().set_yticklabels([])
   plt.gca().tick_params(axis='both', which='both', length=0)
